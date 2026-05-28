@@ -6,9 +6,9 @@ pydantic[email]==2.9.2
 python-dotenv==1.0.1
 
 # Phase 2 — DB (uncomment when ready)
-sqlalchemy==2.0.30
+sqlalchemy==2.0.36
 asyncpg==0.30.0
-alembic==1.13.1
+alembic==1.13.3
 
 # Phase 3 — Auth (uncomment when ready)
 # python-jose[cryptography]==3.3.0
