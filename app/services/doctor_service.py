@@ -1,32 +1,28 @@
-from app.schemas.doctor import DoctorCreate, DoctorUpdate
-from datetime import datetime
-from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi import HTTPException, status
+from app.models.doctor import Doctor
+from app.schemas.doctor import DoctorCreate, DoctorUpdate
+from typing import Optional
 
-# Temporary in-memory store
-# In Phase 2 this entire block gets replaced by SQLAlchemy DB calls
-# Nothing outside this file needs to change
-_doctors: dict[int, dict] = {}
-_next_id: int = 1
 
-def _now() -> datetime:
-    return datetime.utcnow()
-
-def get_all_doctors(
-        speciality: Optional[str] = None,
-        is_available: Optional[bool] = None,
-) -> list[dict]:
-    doctors = list(_doctors.values())
-
-    if speciality:
-        doctors = [d for d in doctors if d["speciality"] == speciality]
+async def get_all_doctors(
+    db: AsyncSession,
+    specialty: Optional[str] = None,
+    is_available: Optional[bool] = None
+) -> list[Doctor]:
+    query = select(Doctor)
+    if specialty:
+        query = query.where(Doctor.specialty == specialty)
     if is_available is not None:
-        doctors = [d for d in doctors if d["is_available"] == is_available]
-    
-    return doctors
+        query = query.where(Doctor.is_available == is_available)
+    result = await db.execute(query)
+    return result.scalars().all()
 
-def get_doctor_by_id(doctor_id: int) -> dict:
-    doctor = _doctors.get(doctor_id)
+
+async def get_doctor_by_id(db: AsyncSession, doctor_id: int) -> Doctor:
+    result = await db.execute(select(Doctor).where(Doctor.id == doctor_id))
+    doctor = result.scalar_one_or_none()
     if not doctor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -34,38 +30,34 @@ def get_doctor_by_id(doctor_id: int) -> dict:
         )
     return doctor
 
-def create_doctor(data: DoctorCreate) -> dict:
-    global _next_id
 
-    for doc in _doctors.values():
-        if doc["email"] == data.email:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Doctor with email {data.email} already exists"
-            )
-
-    now = _now()
-    doctor = {
-        "id": _next_id,
-        **data.model_dump(),
-        "created_at": now,
-        "updated_at": now,
-    }
-    _doctors[_next_id] = doctor
-    _next_id += 1
+async def create_doctor(db: AsyncSession, data: DoctorCreate) -> Doctor:
+    # Check for duplicate email
+    result = await db.execute(select(Doctor).where(Doctor.email == data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Doctor with email {data.email} already exists"
+        )
+    doctor = Doctor(**data.model_dump())
+    db.add(doctor)
+    await db.flush()   # writes to DB within transaction, gets the auto-generated id
+    await db.refresh(doctor)  # reloads from DB — gets created_at, updated_at
     return doctor
 
-def update_doctor(doctor_id: int, data: DoctorUpdate) -> dict:
-    doctor = get_doctor_by_id(doctor_id)
 
+async def update_doctor(db: AsyncSession, doctor_id: int, data: DoctorUpdate) -> Doctor:
+    doctor = await get_doctor_by_id(db, doctor_id)
     updates = data.model_dump(exclude_none=True)
-    doctor.update(updates)
-    doctor["updated_at"] = _now()
-    _doctors[doctor_id] = doctor
+    for field, value in updates.items():
+        setattr(doctor, field, value)
+    await db.flush()
+    await db.refresh(doctor)
     return doctor
 
-def delete_doctor(doctor_id: int) -> dict:
-    get_doctor_by_id(doctor_id)
-    _doctors[doctor_id]["is_available"] = False
-    _doctors[doctor_id]["updated_at"] = _now()
+
+async def delete_doctor(db: AsyncSession, doctor_id: int) -> dict:
+    doctor = await get_doctor_by_id(db, doctor_id)
+    doctor.is_available = False
+    await db.flush()
     return {"message": f"Doctor {doctor_id} deactivated successfully"}
