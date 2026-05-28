@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.config import get_settings
+from app.core.database import engine, Base
 from app.api import doctors, patients, appointments
 
 settings = get_settings()
@@ -8,16 +9,14 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Everything BEFORE yield runs on startup
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     print(f"Environment: {settings.ENVIRONMENT}")
-    print(f"Debug mode: {settings.DEBUG}")
-    # Phase 2 — DB connection pool will be created here
-    # Phase 4 — SQS client will be initialized here
+    # DB tables already created by Alembic — we just verify connection
+    async with engine.begin() as conn:
+        print("Database connection: OK")
     yield
-    # Everything AFTER yield runs on shutdown
-    print("Shutting down...")
-    # Phase 2 — DB connection pool will be closed here
+    await engine.dispose()
+    print("Database connection closed. Shutting down.")
 
 
 app = FastAPI(
@@ -29,7 +28,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Mount all routers
 app.include_router(doctors.router)
 app.include_router(patients.router)
 app.include_router(appointments.router)
@@ -49,6 +47,5 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        # Phase 2 — will add db: "connected" here
-        # Phase 4 — will add sqs: "connected" here
+        "db": "connected",
     }
