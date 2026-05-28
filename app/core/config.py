@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
 
+    #Phase 2 - DB
+    DATABASE_URL: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
