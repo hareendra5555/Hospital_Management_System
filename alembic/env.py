@@ -6,7 +6,7 @@ from app.core.config import get_settings
 
 # Import all models so Alembic can detect them
 from app.core.database import Base
-from app.models import doctor, patient, appointment  # noqa
+from app.models import doctor, patient, appointment, user  # noqa
 
 config = context.config
 settings = get_settings()
