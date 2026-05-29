@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.config import get_settings
-from app.core.database import engine, Base
-from app.api import doctors, patients, appointments
+from app.core.database import engine
+from app.api import doctors, patients, appointments, auth     # ← add auth
 
 settings = get_settings()
 
@@ -11,12 +11,11 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     print(f"Environment: {settings.ENVIRONMENT}")
-    # DB tables already created by Alembic — we just verify connection
     async with engine.begin() as conn:
         print("Database connection: OK")
     yield
     await engine.dispose()
-    print("Database connection closed. Shutting down.")
+    print("Shutting down.")
 
 
 app = FastAPI(
@@ -28,6 +27,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth.router)              # ← add this
 app.include_router(doctors.router)
 app.include_router(patients.router)
 app.include_router(appointments.router)
