@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     #Phase 2 - DB
     DATABASE_URL: str = ""
     
+    #Phase 3
+    SECRET_KEY: str = ""
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
